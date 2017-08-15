@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Mortgage Calculator</title>
+    <script src="https://unpkg.com/react@latest/dist/react.js"></script>
+    <script src="https://unpkg.com/react-dom@latest/dist/react-dom.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6.15.0/babel.min.js"></script>
+
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/c3/0.4.15/c3.min.css" rel="stylesheet"></link>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/c3/0.4.15/c3.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.4/lodash.min.js"></script>
+    <style>
+        * {
+            /* outline: 1px solid black; */
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            min-height: 100%;
+        }
+
+        body {
+            font-size: 18px;
+            font-family: 'Helvetica', sans-serif;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        #root {
+            font-size: 1em;
+            background: lightgray;
+            color: darkslategrey;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            min-height: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        var container = document.getElementById('root');
+
+        class App extends React.Component {
+            constructor(props) {
+                super(props);
+
+                this.debounce = _.debounce(this.recalculate, 100);                
+            }
+            componentDidMount() {
+                this.chart = c3.generate({
+                    bindto: '#chart',
+                    data: {
+                        columns: [
+                            ['balance'],
+                        ]
+                    }
+                });
+                this.recalculate();
+            }
+
+            componentWillMount() {
+                this.state = {
+                    salePrice: 180000,
+                    insurance: 100,
+                    pmi: 118,
+                    term: 360,
+                    taxes: 3500,
+                    monthlyTax: 3500/12,
+                    downPaymentPercent: 3.5,
+                    apr: 4,
+                    payment: 0,
+                    totalInterest: 0,
+                    calculateRan: false,
+                    downPayment: 0,
+                    amountToFinance: 0,
+                }
+                this.updateDownPayment();
+            }
+
+            updateDownPayment() {
+                this.setState({downPayment: this.state.downPaymentPercent * this.state.salePrice / 100});
+                this.updateAmountToFinance();
+            }
+
+            updateAmountToFinance() {
+                this.setState({amountToFinance: this.state.salePrice - this.state.downPayment});
+            }
+
+            recalculate() {
+                console.log('Recalculating.');
+                var pmt = this.calculate();
+                this.setState({payment: pmt, calculateRan: true});
+            }
+
+            calculate() {
+                var origBal = this.state.amountToFinance;
+                var bal = origBal;
+                var payment = 0;
+                var monthlyRate = this.state.apr/1200;
+                var bals = [bal];
+                var ints = [0];
+                var totalInt = 0;
+
+                while (payment < bal) {
+                    for (var i = 0; i < this.state.term; i++) {
+                        var interest = monthlyRate * bal;
+                        totalInt += interest;
+                        ints.push(totalInt);
+
+                        var principle = payment - interest;
+                        bal = bal - principle;
+                        bals.push(bal)
+                    }
+
+                    if (bal <= 0) {
+                        this.chart.load({
+                            columns: [
+                                ['balance', ...bals],
+                                ['interest', ...ints],
+                            ]
+                        })
+                        this.setState({totalInterest: totalInt});
+                        return payment;
+                    }
+
+                    payment += 0.01;
+                    bal = origBal;
+                    bals = [bal];
+                    ints = [];
+                    totalInt = 0;
+                }
+
+                this.chart.load({
+                    columns: [
+                        ['balance', ...bals],
+                        ['interest', ...ints],                        
+                    ]
+                })
+                return payment;
+            }
+
+            onPriceChange(e) {
+                this.updateDownPayment();
+                this.debounce();
+                this.setState({salePrice: e.target.value});
+
+                e.preventDefault();
+            }
+
+            onInsuranceChange(e) {
+                this.setState({insurance: e.target.value});
+            }
+
+            onPMIChange(e) {
+                this.setState({pmi: e.target.value});
+            }
+
+            onTermChange(e) {
+                this.debounce();
+                this.setState({term: e.target.value});
+
+                e.preventDefault();
+            }
+
+            onTaxChange(e) {
+                this.setState({taxes: e.target.value, monthlyTax: e.target.value/12});
+            }
+
+            onDownPaymentChange(e) {
+                this.updateDownPayment();
+                this.debounce();
+                this.setState({downPaymentPercent: e.target.value});
+
+                e.preventDefault();
+            }
+
+            onAPRChange(e) {
+                this.debounce();
+                this.setState({apr: e.target.value});
+
+                e.preventDefault();
+            }
+
+            totalPayment() {
+                return parseFloat(this.state.payment)+
+                    parseFloat(this.state.pmi)+
+                    (parseFloat(this.state.taxes)/12)+
+                    parseFloat(this.state.insurance);
+            }
+
+            render() {
+                const styles = {
+                    hideGraph: {
+                        display: 'none',
+                    },
+                    inputSectionStyle: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        borderBottomColor: 'darkslategray',
+                        borderBottomStyle: 'solid',
+                        borderBottomWidth: 1,
+                        paddingTop: 10,
+                        paddingBottom: 10,
+                    },
+                    outputSectionStyle: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        borderBottomColor: 'darkslategray',
+                        borderBottomStyle: 'solid',
+                        borderBottomWidth: 1,
+                        paddingTop: 10,
+                        paddingBottom: 10,
+                    },
+                    sliderInputContainerStyle: {
+                        display: 'flex',
+                        flexDirection: 'column',
+                    },
+                    sliderInputTextStyle: {
+                        display: 'flex',
+                        flexDirectin: 'row'
+                    },
+                    outputSectionLineStyle: {
+                        display: 'flex',
+                        flexDirectin: 'row',
+                        height: '2em',
+                        lineHeight: '2em'
+                    },
+                    sliderInputLabelStyle: {
+                        width: 200
+                    },
+                    outputSectionLabelStyle: {
+                        width: 200
+                    },
+                    sliderInputValueStyle: {
+                    },
+                    headerContainerStyle: {
+                        display: 'flex',
+                        flexDirection: 'row',
+                        justifyContent: 'center',
+                        padding: 10
+                    },
+                    headerStyle: {
+                        fontSize: 32,
+                        color: 'black',
+                    },
+                    taxNoticeStyle: {
+                        fontSize: 10,
+                    },
+                    outputSectionValueStyle: {
+                        textAlign: 'right',
+                        flexGrow: 1
+                    }
+                };
+
+                return (
+                    <div>
+                        <div style={styles.headerContainerStyle}>
+                            <div style={styles.headerStyle}>
+                                Mortage Calculator
+                            </div>
+                        </div>
+
+                        <div style={styles.inputSectionStyle}>
+                            <div style={styles.sliderInputContainerStyle}>
+                                <div style={styles.sliderInputTextStyle}>
+                                    <div style={styles.sliderInputLabelStyle}>
+                                        Sale Price:
+                                    </div>
+                                    <input 
+                                        type='number' 
+                                        value={this.state.salePrice} 
+                                        style={styles.sliderInputValueStyle} 
+                                        onChange={(e) => this.onPriceChange(e)} />
+                                </div>
+
+                                <input 
+                                    type='range' 
+                                    min='0' 
+                                    max='300000' 
+                                    value={this.state.salePrice} 
+                                    onChange={(e) => this.onPriceChange(e)} />
+                            </div>
+
+                            <div style={styles.sliderInputContainerStyle}>
+                                <div style={styles.sliderInputTextStyle}>
+                                    <div style={styles.sliderInputLabelStyle}>
+                                        Down Payment:
+                                    </div>
+                                    <input 
+                                        type='number' 
+                                        value={this.state.downPaymentPercent} 
+                                        style={styles.sliderInputValueStyle} 
+                                        onChange={(e) => this.onDownPaymentChange(e)} />                                    
+                                </div>
+
+                                <input 
+                                    type='range' 
+                                    min='0' 
+                                    max='20' 
+                                    step='.1' 
+                                    value={this.state.downPaymentPercent} 
+                                    onChange={(e) => this.onDownPaymentChange(e)} />                                
+                            </div>
+
+                            <div style={styles.sliderInputContainerStyle}>
+                                <div style={styles.sliderInputTextStyle}>
+                                    <div style={styles.sliderInputLabelStyle}>
+                                        APR:
+                                    </div>
+                                    <input 
+                                        type='number' 
+                                        value={this.state.apr} 
+                                        style={styles.sliderInputValueStyle} 
+                                        onChange={(e) => this.onAPRChange(e)} />                                    
+                                </div>
+
+                                <input 
+                                    type='range' 
+                                    min='0' 
+                                    max='7' 
+                                    step='.1' 
+                                    value={this.state.apr} onChange={(e) => this.onAPRChange(e)} />                                
+                            </div>
+
+                            <div style={styles.sliderInputContainerStyle}>
+                                <div style={styles.sliderInputTextStyle}>
+                                    <div style={styles.sliderInputLabelStyle}>
+                                        Term:
+                                    </div>
+                                    <input 
+                                        type='number' 
+                                        value={this.state.term} 
+                                        style={styles.sliderInputValueStyle} 
+                                        onChange={(e) => this.onTermChange(e)} />                                    
+                                </div>
+
+                                <input 
+                                    type='range' 
+                                    min='0' 
+                                    max='360' 
+                                    value={this.state.term} 
+                                    onChange={(e) => this.onTermChange(e)} />                                                                
+                            </div>
+                        </div>
+
+                        <div style={styles.inputSectionStyle}>
+                            <div style={styles.sliderInputContainerStyle}>
+                                <div style={styles.sliderInputTextStyle}>
+                                    <div style={styles.sliderInputLabelStyle}>
+                                        PMI:
+                                    </div>
+                                    <input 
+                                        type='number' 
+                                        value={this.state.pmi} 
+                                        style={styles.sliderInputValueStyle} 
+                                        onChange={(e) => this.onPMIChange(e)} />                                                                        
+                                </div>
+
+                                <input 
+                                    type='range' 
+                                    min='0' 
+                                    max='300' 
+                                    value={this.state.pmi} 
+                                    onChange={(e) => this.onPMIChange(e)} />                                                                                                
+                            </div>
+
+                            <div style={styles.sliderInputContainerStyle}>
+                                <div style={styles.sliderInputTextStyle}>
+                                    <div style={styles.sliderInputLabelStyle}>
+                                        Taxes:
+                                    </div>
+                                    <input 
+                                        type='number' 
+                                        value={this.state.taxes} 
+                                        style={styles.sliderInputValueStyle}
+                                        onChange={(e) => this.onTaxChange(e)} />                                    
+                                </div>
+
+                                <input 
+                                    type='range' 
+                                    min='0' 
+                                    max='10000' 
+                                    value={this.state.taxes} 
+                                    onChange={(e) => this.onTaxChange(e)} />                                
+                            </div>
+
+                            <div style={styles.sliderInputContainerStyle}>
+                                <div style={styles.sliderInputTextStyle}>
+                                    <div style={styles.sliderInputLabelStyle}>
+                                        Insurance:
+                                    </div>
+                                    <input 
+                                        type='number' 
+                                        value={this.state.insurance} 
+                                        style={styles.sliderInputValueStyle} 
+                                        onChange={(e) => this.onInsuranceChange(e)} />                                    
+                                </div>
+
+                                <input 
+                                    type='range' 
+                                    min='0' 
+                                    max='200' 
+                                    value={this.state.insurance} 
+                                    onChange={(e) => this.onInsuranceChange(e)} />
+                            </div>
+                        </div>
+
+                        <div style={styles.outputSectionStyle}>
+                            <div style={styles.outputSectionLineStyle}>
+                                <div style={styles.outputSectionLabelStyle}>
+                                    Down Payment:
+                                </div>
+                                <div style={styles.outputSectionValueStyle}>
+                                    ${this.state.downPayment.toFixed(2)}
+                                </div>
+                            </div>
+                            
+                            <div style={styles.outputSectionLineStyle}>
+                                <div style={styles.outputSectionLabelStyle}>
+                                    Amount To Finance:
+                                </div>
+                                <div style={styles.outputSectionValueStyle}>
+                                    ${this.state.amountToFinance.toFixed(2)}
+                                </div>
+                            </div>
+
+                            <div style={styles.outputSectionLineStyle}>
+                                <div style={styles.outputSectionLabelStyle}>
+                                    Payment Amount:
+                                </div>
+                                <div style={styles.outputSectionValueStyle}>
+                                    ${this.state.payment.toFixed(2)}
+                                </div>
+                            </div>
+
+                            <div style={styles.outputSectionLineStyle}>
+                                <div style={styles.outputSectionLabelStyle}>
+                                    Total Interest:
+                                </div>
+                                <div style={styles.outputSectionValueStyle}>
+                                    ${this.state.totalInterest.toFixed(2)}
+                                </div>
+                            </div>
+
+                            <div style={styles.outputSectionLineStyle}>
+                                <div style={styles.outputSectionLabelStyle}>
+                                    Total Of Payments:
+                                </div>
+                                <div style={styles.outputSectionValueStyle}>
+                                    ${(this.state.totalInterest+this.state.amountToFinance).toFixed(2)}
+                                </div>
+                            </div>
+
+                            <div style={styles.outputSectionLineStyle}>
+                                <div style={styles.outputSectionLabelStyle}>
+                                    Total Monthly Payment:
+                                </div>
+                                <div style={styles.outputSectionValueStyle}>
+                                    ${this.totalPayment().toFixed(2)}
+                                </div>
+                            </div>
+
+                            <div style={styles.taxNoticeStyle}>
+                                <em>Includes ${this.state.monthlyTax.toFixed(2)} for taxes.</em>
+                            </div>
+                        </div>
+                        
+                        <div id="chart" style={(!this.state.calculateRan) ? styles.hideGraph : {}}></div>
+                    </div>
+                )
+            }
+        }
+
+        ReactDOM.render(<App />, container);
+    </script>
+</body>
+
+</html>
