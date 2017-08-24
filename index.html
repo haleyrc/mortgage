@@ -13,6 +13,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/c3/0.4.15/c3.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.4/lodash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/1.1.1/Chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-chartjs/0.8.0/react-chartjs.js"></script>
     <style>
         * {
             /* outline: 1px solid black; */
@@ -132,7 +134,7 @@
 
         class OutputContainer extends React.Component {
             render() {
-                const val = this.props.val.toFixed(2);
+                const val = this.props.val;
 
                 const styles = {
                     lineStyle: {
@@ -163,21 +165,15 @@
             constructor(props) {
                 super(props);
 
-                this.debounce = _.debounce(this.recalculate, 100);                
+                this.onPriceChange = this.onPriceChange.bind(this)
+                this.onDownPaymentChange = this.onDownPaymentChange.bind(this);
+                this.onAPRChange = this.onAPRChange.bind(this);
+                this.onTermChange = this.onTermChange.bind(this);
+                this.onPMIChange = this.onPMIChange.bind(this);
+                this.onTaxChange = this.onTaxChange.bind(this);
+                this.onInsuranceChange = this.onInsuranceChange.bind(this);
             }
             
-            componentDidMount() {
-                this.chart = c3.generate({
-                    bindto: '#chart',
-                    data: {
-                        columns: [
-                            ['balance'],
-                        ]
-                    }
-                });
-                this.recalculate();
-            }
-
             componentWillMount() {
                 this.state = {
                     salePrice: 180000,
@@ -189,7 +185,6 @@
                     downPaymentPercent: 3.5,
                     apr: 4,
                     payment: 0,
-                    totalInterest: 0,
                     calculateRan: false,
                     downPayment: 0,
                     amountToFinance: 0,
@@ -206,62 +201,8 @@
                 this.setState({amountToFinance: this.state.salePrice - this.state.downPayment});
             }
 
-            recalculate() {
-                console.log('Recalculating.');
-                var pmt = this.calculate();
-                this.setState({payment: pmt, calculateRan: true});
-            }
-
-            calculate() {
-                var origBal = this.state.amountToFinance;
-                var bal = origBal;
-                var payment = 0;
-                var monthlyRate = this.state.apr/1200;
-                var bals = [bal];
-                var ints = [0];
-                var totalInt = 0;
-
-                while (payment < bal) {
-                    for (var i = 0; i < this.state.term; i++) {
-                        var interest = monthlyRate * bal;
-                        totalInt += interest;
-                        ints.push(totalInt);
-
-                        var principle = payment - interest;
-                        bal = bal - principle;
-                        bals.push(bal)
-                    }
-
-                    if (bal <= 0) {
-                        this.chart.load({
-                            columns: [
-                                ['balance', ...bals],
-                                ['interest', ...ints],
-                            ]
-                        })
-                        this.setState({totalInterest: totalInt});
-                        return payment;
-                    }
-
-                    payment += 0.01;
-                    bal = origBal;
-                    bals = [bal];
-                    ints = [];
-                    totalInt = 0;
-                }
-
-                this.chart.load({
-                    columns: [
-                        ['balance', ...bals],
-                        ['interest', ...ints],                        
-                    ]
-                })
-                return payment;
-            }
-
             onPriceChange(val) {
                 this.updateDownPayment();
-                this.debounce();
                 this.setState({salePrice: val});
             }
 
@@ -274,7 +215,6 @@
             }
 
             onTermChange(val) {
-                this.debounce();
                 this.setState({term: val});
             }
 
@@ -284,39 +224,20 @@
 
             onDownPaymentChange(val) {
                 this.updateDownPayment();
-                this.debounce();
                 this.setState({downPaymentPercent: val});
             }
 
             onAPRChange(val) {
-                this.debounce();
                 this.setState({apr: val});
             }
 
-            totalPayment() {
-                return parseFloat(this.state.payment)+
-                    parseFloat(this.state.pmi)+
-                    (parseFloat(this.state.taxes)/12)+
-                    parseFloat(this.state.insurance);
-            }
 
             render() {
                 const styles = {
                     hideGraph: {
                         display: 'none',
                     },
-                    outputSectionStyle: {
-                        display: 'flex',
-                        flexDirection: 'column',
-                        borderBottomColor: 'darkslategray',
-                        borderBottomStyle: 'solid',
-                        borderBottomWidth: 1,
-                        paddingTop: 10,
-                        paddingBottom: 10,
-                    },
-                    taxNoticeStyle: {
-                        fontSize: 10,
-                    },
+
                 };
 
                 return (
@@ -326,23 +247,23 @@
                         <InputSection>
                             <InputContainer 
                                 min='0' max='300000' 
-                                val={this.state.salePrice} onChange={this.onPriceChange.bind(this)}>
+                                val={this.state.salePrice} onChange={this.onPriceChange}>
                                 Sale Price
                             </InputContainer>
                             <InputContainer 
                                 min='0' max='20' 
-                                val={this.state.downPaymentPercent} onChange={this.onDownPaymentChange.bind(this)}>
+                                val={this.state.downPaymentPercent} onChange={this.onDownPaymentChange}>
                                 Down Payment
                             </InputContainer>
                             { /* TODO: add step */ }
                             <InputContainer 
                                 min='0' max='7' 
-                                val={this.state.apr} onChange={this.onAPRChange.bind(this)}>
+                                val={this.state.apr} onChange={this.onAPRChange}>
                                 APR
                             </InputContainer>
                             <InputContainer 
                                 min='0' max='360' 
-                                val={this.state.term} onChange={this.onTermChange.bind(this)}>
+                                val={this.state.term} onChange={this.onTermChange}>
                                 Term
                             </InputContainer>
                         </InputSection>
@@ -350,36 +271,139 @@
                         <InputSection>
                             <InputContainer 
                                 min='0' max='300' 
-                                val={this.state.pmi} onChange={this.onPMIChange.bind(this)}>
+                                val={this.state.pmi} onChange={this.onPMIChange}>
                                 PMI
                             </InputContainer>
                             <InputContainer 
                                 min='0' max='10000' 
-                                val={this.state.taxes} onChange={this.onTaxChange.bind(this)}>
+                                val={this.state.taxes} onChange={this.onTaxChange}>
                                 Taxes
                             </InputContainer>
                             <InputContainer 
                                 min='0' max='200' 
-                                val={this.state.insurance} onChange={this.onInsuranceChange.bind(this)}>
+                                val={this.state.insurance} onChange={this.onInsuranceChange}>
                                 Insurance
                             </InputContainer>
                         </InputSection>
 
-                        <div style={styles.outputSectionStyle}>
-                            <OutputContainer val={this.state.downPayment}>Down Payment</OutputContainer>
-                            <OutputContainer val={this.state.amountToFinance}>Amount To Finance</OutputContainer>
-                            <OutputContainer val={this.state.payment}>Payment Amount</OutputContainer>
-                            <OutputContainer val={this.state.totalInterest}>Total Interest</OutputContainer>
-                            <OutputContainer val={this.state.totalInterest+this.state.amountToFinance}>Total Of Payments</OutputContainer>
-                            <OutputContainer val={this.totalPayment()}>Total Monthly Payment</OutputContainer>
-                            <div style={styles.taxNoticeStyle}>
-                                <em>Includes ${this.state.monthlyTax.toFixed(2)} for taxes.</em>
-                            </div>
-                        </div>
-                        
-                        <div id="chart" style={(!this.state.calculateRan) ? styles.hideGraph : {}}></div>
+                        <OutputSection
+                            downPayment={this.state.downPayment}
+                            amountToFinance={this.state.amountToFinance}
+                            payment={this.state.payment}
+                            monthlyTax={this.state.monthlyTax}
+                            pmi={this.state.pmi}
+                            taxes={this.state.taxes}
+                            insurance={this.state.insurance}
+                            apr={this.state.apr}
+                            term={this.state.term}
+                        />
                     </div>
                 )
+            }
+        }
+
+        class OutputSection extends React.Component {
+            constructor(props) {
+                super(props);
+            }
+
+            componentWillMount() {
+                this.calculate(this.props);
+            }
+
+            componentWillReceiveProps(nextProps) {
+                this.calculate(nextProps);
+            }
+
+            calculate({amountToFinance, apr, term}) {
+                let origBal = amountToFinance;
+                let bal = origBal;
+                let payment = 0;
+                let monthlyRate = apr/1200;
+                let bals = [bal];
+                let ints = [0];
+                let totalInt = 0;
+
+                while (payment < bal) {
+                    for (let i = 0; i < term; i++) {
+                        let interest = monthlyRate * bal;
+                        totalInt += interest;
+                        ints.push(totalInt);
+
+                        let principle = payment - interest;
+                        bal = bal - principle;
+                        bals.push(bal)
+                    }
+
+                    if (bal <= 0) {
+                        this.setState({payment, totalInterest: totalInt, bals, ints});
+                        return payment;
+                    }
+
+                    payment += 1;
+                    bal = origBal;
+                    bals = [bal];
+                    ints = [];
+                    totalInt = 0;
+                }
+
+                this.setState({payment, totalInterest: totalInt, bals, ints})
+                return payment;
+            }
+
+            totalPayment() {
+                return parseFloat(this.props.payment)+
+                    parseFloat(this.props.pmi)+
+                    (parseFloat(this.props.taxes)/12)+
+                    parseFloat(this.props.insurance);
+            }
+
+            render() {
+                const { downPayment, amountToFinance, payment, monthlyTax } = this.props;
+                const outputSectionStyle = {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        borderBottomColor: 'darkslategray',
+                        borderBottomStyle: 'solid',
+                        borderBottomWidth: 1,
+                        paddingTop: 10,
+                        paddingBottom: 10,
+                };
+                // var LineChart = require("react-chartjs").Line;
+                var LineChart = window['react-chartjs'].Line;
+                var labels = Array(this.state.bals.length).join(".").split(".");
+
+                var chartData = {
+                    labels: labels,
+                    datasets: [{
+                        data: this.state.bals
+                    },
+                    {
+                        data: this.state.ints
+                    }]
+                }
+
+                const chartOptions = {
+                    pointDot: false,
+                    datasetFill: false,
+                    scaleShowGridLines: false,
+                    animation: false,
+                }
+
+                return (
+                    <div style={outputSectionStyle}>
+                        <OutputContainer val={downPayment}>Down Payment</OutputContainer>
+                        <OutputContainer val={amountToFinance}>Amount To Finance</OutputContainer>
+                        <OutputContainer val={this.state.payment}>Payment Amount</OutputContainer>
+                        <OutputContainer val={this.state.totalInterest}>Total Interest</OutputContainer>
+                        <OutputContainer val={this.state.totalInterest+amountToFinance}>Total Of Payments</OutputContainer>
+                        <OutputContainer val={this.totalPayment()}>Total Monthly Payment</OutputContainer>
+                        <div style={{fontSize:10}}>
+                            <em>Includes ${monthlyTax.toFixed(2)} for taxes.</em>
+                        </div>
+                        <LineChart data={chartData} options={chartOptions} width="600" height="250" />
+                    </div>
+                );
             }
         }
 
